@@ -7,8 +7,11 @@ st.write(
 import pandas as pd
 import altair as alt
 from vega_datasets import data
-
 import us
+
+# Directly load the CSV file from the workspace
+csv_path = "university-donations.csv"
+df = pd.read_csv(csv_path)
 
 state_id_map   = {state.abbr: int(state.fips)  for state in us.states.STATES}
 state_name_map = {int(state.fips): state.name  for state in us.states.STATES}
@@ -36,7 +39,6 @@ state_agg['State Name'] = state_agg['state_fips'].map(state_name_map)
 
 selection_alloc = alt.selection_point(fields=['Gift Allocation'], name='SelectAlloc')
 brush_year      = alt.selection_interval(encodings=['x'], name='BrushYear')
-reset_click     = alt.selection_point(on='click', clear='mouseup', name='ResetClick')
 
 
 college_dropdown = alt.binding_select(
@@ -50,7 +52,6 @@ college_select = alt.selection_single(
     empty='all'
 )
 
-# State dropdown (kept from the original)
 state_dropdown = alt.binding_select(
     options=sorted(df['State'].dropna().unique()),
     name='Select State:'
@@ -98,7 +99,6 @@ line_year = (
                             title='Total Gift Amount')
             ]
         )
-
         .add_selection(brush_year, selection_alloc, college_select, state_select)
         .transform_filter(selection_alloc)
         .transform_filter(college_select)
@@ -127,49 +127,6 @@ bar_subcat = (
         .properties(width=600, height=300, title='Breakdown by Allocation Subcategory')
 )
 
-# 4-D  Choropleth Map of States
-us_states       = alt.topo_feature(data.us_10m.url, 'states')
-state_map_select = alt.selection_multi(fields=['state_fips'], name='StateMapSelect', empty='all')
-
-base_map = (
-    alt.Chart(us_states)
-        .mark_geoshape(stroke='white', strokeWidth=0.5)
-        .encode(
-            color=alt.condition(
-                state_map_select,
-                alt.Color('Total Donations:Q', scale=alt.Scale(scheme='greens')),
-                alt.value('lightgray')
-            ),
-            tooltip=[
-                alt.Tooltip('State Name:N', title='State'),
-                alt.Tooltip('Total Donations:Q', format='$,.0f'),
-                alt.Tooltip('Unique Donors:Q')
-            ]
-        )
-        .transform_lookup(
-            lookup='id',
-            from_=alt.LookupData(
-                state_agg,
-                'state_fips',
-                ['State Name', 'Total Donations', 'Unique Donors']
-            )
-        )
-        .add_selection(state_map_select)
-        .transform_filter(reset_click)
-        .project(type='albersUsa')
-        .properties(width=700, height=400, title='Hover to See State Data')
-)
-
-#
-reset_text = (
-    alt.Chart(pd.DataFrame({'text': ['Click to Reset State Selection']}))
-        .mark_text(align='left', fontSize=13, fontWeight='bold', color='steelblue')
-        .encode(text='text:N')
-        .add_selection(reset_click)
-        .properties(width=300, height=30)
-)
-
-
 controls = (
     alt.Chart(pd.DataFrame({'x': [0]}))
         .mark_point(opacity=0)
@@ -177,15 +134,15 @@ controls = (
         .properties(height=0)
 )
 
+# Only the linked charts, no map
 
 dashboard = (
     alt.vconcat(
         controls,
-        alt.hconcat(base_map, reset_text),
         alt.hconcat(bar_alloc, line_year),
         bar_subcat
     )
     .configure_title(anchor='start')
 )
 
-dashboard
+st.altair_chart(dashboard, use_container_width=True)
